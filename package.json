@@ -1,9 +1,22 @@
 {
+  "type": "module",
+  "description": "玩转小米路由器 4A MiWiFi 3.0.12 版 Web API",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=true playground.ts"
+  },
   "dependencies": {
-    "@types/crypto-js": "^4.2.2",
-    "crypto-js": "^4.2.0"
+    "axios": "^1.7.9",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.7",
+    "pcap": "^3.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.13.4"
-  }
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "trustedDependencies": [
+    "pcap"
+  ]
 }

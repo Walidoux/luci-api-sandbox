@@ -1,25 +1,26 @@
-import { SHA1 } from "crypto-js";
+import CryptoJS from "crypto-js";
 import { config as dotenv } from "dotenv";
 
 import { API } from "./types";
 
 dotenv();
 
-const ROUTER_KEY_PATTERN = /key: '([a-z0-9]+?)',/;
-const MAC_ADDRESS_PATTERN =
-  /var deviceId = '([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})';/;
+const ENDPOINT = "http://router.miwifi.com/cgi-bin/luci";
 
 /**
  * 获取网页首页数据，提取当前路由器对应的key和deviceID
  * @return 提取到的key和deviceID
  */
-async function getKeyDeviceID() {
-  const body: string = await (
-    await fetch(`http://${process.env.ROUTER_ADDRESS}/cgi-bin/luci/web`)
-  ).text();
+async function retrieveKeyDeviceID() {
+  const HTML = await fetch(`${ENDPOINT}/web`, {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  }).then(async (res) => await res.text());
 
-  const key = (ROUTER_KEY_PATTERN.exec(body) ?? ["", ""])[1];
-  const deviceID = (MAC_ADDRESS_PATTERN.exec(body) ?? ["", ""])[1];
+  const key = (/key: '([a-z0-9]+?)',/.exec(HTML) ?? ["", ""])[1];
+  const deviceID =
+    (/var deviceId = '([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})';/.exec(
+      HTML
+    ) ?? ["", ""])[1];
 
   return { key, deviceID };
 }
@@ -40,36 +41,32 @@ function createNonce(deviceID: string): string {
  * 模拟登录
  * @return 登录后获取的Token
  */
-async function getStok(): Promise<API.Auth["token"]> {
-  const { key, deviceID } = await getKeyDeviceID();
+export async function getStok() {
+  const { key, deviceID } = await retrieveKeyDeviceID();
   const nonce = createNonce(deviceID);
-  
+
   const params = new URLSearchParams();
-  const headers: HeadersInit = {
+  const headers = {
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-  };
+  } satisfies HeadersInit;
 
   params.append("username", "admin");
   params.append("logtype", "2");
   params.append("nonce", nonce);
   params.append(
     "password",
-    SHA1(nonce + SHA1(process.env.WIFI_PASSWORD + key).toString()).toString()
+    CryptoJS.SHA1(
+      nonce + CryptoJS.SHA1(process.env.PSWD + key).toString()
+    ).toString()
   );
 
-  const response = await fetch(
-    `http://${process.env.ROUTER_ADDRESS}/cgi-bin/luci/api/xqsystem/login`,
-    {
-      headers,
-      method: "POST",
-      signal: AbortSignal.timeout(5000),
-      body: params.toString(),
-    }
-  );
+  const response = await fetch(`${ENDPOINT}/api/xqsystem/login`, {
+    headers,
+    method: "POST",
+    body: params.toString(),
+  }).then(async (res) => await res.json());
 
-  const data = await response.json() as API.Auth;
-
-  return data.token;
+  return { token: response.token, mac: deviceID };
 }
 
 /**
@@ -79,29 +76,37 @@ async function getStok(): Promise<API.Auth["token"]> {
  */
 export async function getStatus(stok: string): Promise<API.Auth["code"]> {
   const response = await fetch(
-    `http://${process.env.ROUTER_ADDRESS}/cgi-bin/luci/;stok=${stok}/api/xqnetwork/pppoe_status`,
+    `${ENDPOINT}/;stok=${stok}/api/xqnetwork/pppoe_status`,
     { headers: { "Content-Type": "application/json" } }
-  );
+  ).then(async (res) => await res.json());
 
-  const data = (await response.json()) as API.Status;
-
-  return data.status;
+  return response.status;
 }
 
-/**
- *
- * @param stok
- * @returns
- */
-export async function getDeviceList(stok: string): Promise<API.DeviceList> {
-  const response = await fetch(
-    `http://${process.env.ROUTER_ADDRESS}/cgi-bin/luci/;stok=${stok}/api/misystem/devicelist`
-  );
-
-  return await response.json();
+export async function whoIsDemolishingBandwidth(devices: Array<API.Device>) {
+  return [];
 }
 
-/**
- * @returns
- */
-export async function 打击锤(): Promise<void> {}
+export async function getDeviceList(stok: string, mac: string): Promise<Array<API.Device>> {
+  return await fetch(`${ENDPOINT}/;stok=${stok}/api/misystem/devicelist`)
+    .then(async (res) => await res.json())
+    .then((data): Array<API.Device> => Boolean(process.env.INCLUDE_LOCAL_PAYLOADS) ? data.list.filter((device: API.Device): boolean => {
+      return device.mac !== mac.toUpperCase()
+    }) : data.list)
+}
+
+export function getECCD(devices: Array<API.Device>): API.Device[] {
+  return devices.filter((device): boolean => device.type === API.ConnectionType.ECCD);
+}
+
+// HTTPParserError: Response does not match the HTTP/1.1 protocol (Invalid header token)
+// either way this is going to throw an error because of undici strict checks,
+// issue comes from parsing where header response isn't formatted as JSON
+export async function getUploadSpeed(stok: string): Promise<API.Bandwidth> {
+  return await fetch(`${ENDPOINT}/;stok=${stok}/api/misystem/bandwidth_test`, {
+    signal: AbortSignal.timeout(15000),
+  }).catch(err => {
+    const lines = err.cause.data.split("\n") as string[];
+    return JSON.parse(lines[lines.length - 1]);
+  });
+}

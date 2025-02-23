@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+        "module": "Preserve",
+        "target": "ESNext",
+        "moduleResolution": "node",
+        "baseUrl": ".",
+        "esModuleInterop": true,
+        "types": ["node"]
+    }
+}

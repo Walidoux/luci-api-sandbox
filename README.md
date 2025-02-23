@@ -3,11 +3,12 @@
 Listing of the different endpoint available on the Xiaomi Router
 Example of response json can be found under end_point_reference/
 
-- `/api/xqsystem/reboot`                <!-- requires {"client":"web"} in body param ? -->
+- `/api/xqsystem/reboot`
 - `/api/xqsystem/shutdown`
 - `/api/xqsystem/reset`
 - `/api/xqsystem/get_languages`         get_languages.json
 - `/api/misystem/router_name`           router_name.json
+- `/api/misystem/qos_info`
 - `/api/misystem/r_ip_conflict`         r_ip_conflict.json
 - `/api/xqnetdetect/nettb`              nettb.json
 - `/api/misystem/devicelist`            devicelist.json
@@ -46,3 +47,26 @@ Web interface endpoint:
 
 This endpoint only deliver an "Internal Server Error":
 /api/xqdatacenter/request
+
+## Installation
+
+```sh
+sudo pacman -Syu libpcap
+npm install -g node-gyp
+```
+
+## Post-installation
+
+```bash
+# Granting node permissions to use sockets
+sudo setcap cap_net_raw,cap_net_admin=eip $(which node)
+
+# Make node-gyp build pcap package by trusting the package itself
+bun pm trust pcap
+```
+
+## Roadmap
+
+- [ ] MiRouter 4A Model does not support firmware to access SSH router, we will be using packet sniffing as a method to know the traffic
+- [ ] Move codebase from Windows to Linux because struggling to install pcap
+- [ ] 
